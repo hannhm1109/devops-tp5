@@ -60,10 +60,16 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh """
-                    export DOCKERHUB_USER=${DOCKERHUB_USER}
-                    export BUILD_NUMBER=${BUILD_NUMBER}
-                    export APP_VERSION=${IMAGE_TAG}
-                    docker compose up -d --pull always --force-recreate
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        --restart unless-stopped \
+                        -p ${APP_PORT}:3000 \
+                        -e PORT=3000 \
+                        -e APP_VERSION=${IMAGE_TAG} \
+                        -e BUILD_NUMBER=${BUILD_NUMBER} \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
                 """
             }
         }
@@ -72,7 +78,7 @@ pipeline {
             steps {
                 sh 'sleep 10'
                 sh """
-                    STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${APP_PORT}/health)
+                    STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://host.docker.internal:${APP_PORT}/health)
                     echo "Health check status: \$STATUS"
                     if [ "\$STATUS" = "200" ]; then
                         echo "App is healthy"
